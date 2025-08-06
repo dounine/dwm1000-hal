@@ -9,7 +9,7 @@
 //!
 //! [register-level interface]: ../ll/index.html
 
-use crate::{hal, spi};
+use crate::{hal, device};
 use core::{fmt, num::Wrapping};
 
 pub use awake::*;
@@ -31,14 +31,14 @@ mod sending;
 mod awake;
 
 /// Entry point to the DW1000 driver API
-pub struct DWM1000<SPI, CS, State> {
-    spi: spi::DWM1000<SPI, CS>,
+pub struct DWM1000<SPI, State> {
+    spi: device::DWM1000SpiDevice<SPI>,
     seq: Wrapping<u8>,
     state: State,
 }
 
 // Can't be derived without putting requirements on `SPI` and `CS`.
-impl<SPI, CS, State> fmt::Debug for DWM1000<SPI, CS, State>
+impl<SPI, State> fmt::Debug for DWM1000<SPI, State>
 where
     State: fmt::Debug,
 {

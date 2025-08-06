@@ -41,17 +41,16 @@ pub enum IrqPolarity {
     ActiveLow = 0,
 }
 
-impl<SPI, CS> DWM1000<SPI, CS, Ready>
+impl<SPI> DWM1000<SPI, Ready>
 where
     SPI: SpiDevice,
-    CS: OutputPin,
 {
     /// Sets the RX and TX antenna delays
     pub fn set_antenna_delay(
         &mut self,
         rx_delay: u16,
         tx_delay: u16,
-    ) -> Result<(), Error<SPI, CS>> {
+    ) -> Result<(), Error<SPI>> {
         self.spi.lde_rxantd().write(|w| w.value(rx_delay))?;
         self.spi.tx_antd().write(|w| w.value(tx_delay))?;
 
@@ -63,7 +62,7 @@ where
         &mut self,
         pan_id: mac::PanId,
         addr: mac::ShortAddress,
-    ) -> Result<(), Error<SPI, CS>> {
+    ) -> Result<(), Error<SPI>> {
         self.spi
             .panadr()
             .write(|w| w.pan_id(pan_id.0).short_addr(addr.0))?;
@@ -74,7 +73,7 @@ where
     /// Sets up the sync pin functionality
     ///
     /// After init, it is set to None
-    pub fn set_sync_behaviour(&mut self, behaviour: SyncBehaviour) -> Result<(), Error<SPI, CS>> {
+    pub fn set_sync_behaviour(&mut self, behaviour: SyncBehaviour) -> Result<(), Error<SPI>> {
         match behaviour {
             SyncBehaviour::None => {
                 // Disable all
@@ -117,7 +116,7 @@ where
     /// Set the polarity of the interrupt pin.
     ///
     /// The default is ActiveHigh, which is also recommended for power savings.
-    pub fn set_irq_polarity(&mut self, polarity: IrqPolarity) -> Result<(), Error<SPI, CS>> {
+    pub fn set_irq_polarity(&mut self, polarity: IrqPolarity) -> Result<(), Error<SPI>> {
         self.spi
             .sys_cfg()
             .modify(|_, w| w.hirq_pol(polarity as u8))?;
@@ -148,7 +147,7 @@ where
         destination: Option<mac::Address>,
         send_time: SendTime,
         config: TxConfig,
-    ) -> Result<DWM1000<SPI, CS, Sending>, Error<SPI, CS>> {
+    ) -> Result<DWM1000<SPI, Sending>, Error<SPI>> {
         // Clear event counters
         self.spi.evc_ctrl().write(|w| w.evc_clr(0b1))?;
         while self.spi.evc_ctrl().read()?.evc_clr() == 0b1 {}
@@ -330,7 +329,7 @@ where
     pub fn receive(
         self,
         config: RxConfig,
-    ) -> Result<DWM1000<SPI, CS, SingleBufferReceiving>, Error<SPI, CS>> {
+    ) -> Result<DWM1000<SPI, SingleBufferReceiving>, Error<SPI>> {
         let mut rx_radio = DWM1000 {
             spi: self.spi,
             seq: self.seq,
@@ -364,7 +363,7 @@ where
     pub fn receive_auto_double_buffered(
         self,
         config: RxConfig,
-    ) -> Result<DWM1000<SPI, CS, AutoDoubleBufferReceiving>, Error<SPI, CS>> {
+    ) -> Result<DWM1000<SPI, AutoDoubleBufferReceiving>, Error<SPI>> {
         let mut rx_radio = DWM1000 {
             spi: self.spi,
             seq: self.seq,
@@ -384,7 +383,7 @@ where
     /// Enables transmit interrupts for the events that `wait` checks
     ///
     /// Overwrites any interrupt flags that were previously set.
-    pub fn enable_tx_interrupts(&mut self) -> Result<(), Error<SPI, CS>> {
+    pub fn enable_tx_interrupts(&mut self) -> Result<(), Error<SPI>> {
         self.spi.sys_mask().modify(|_, w| w.mtxfrs(0b1))?;
         Ok(())
     }
@@ -392,7 +391,7 @@ where
     /// Enables receive interrupts for the events that `wait` checks
     ///
     /// Overwrites any interrupt flags that were previously set.
-    pub fn enable_rx_interrupts(&mut self) -> Result<(), Error<SPI, CS>> {
+    pub fn enable_rx_interrupts(&mut self) -> Result<(), Error<SPI>> {
         self.spi.sys_mask().modify(|_, w| {
             w.mrxdfr(0b1) // Data Frame Ready
                 .mrxfce(0b1) // FCS Error
@@ -409,7 +408,7 @@ where
     }
 
     /// Disables all interrupts
-    pub fn disable_interrupts(&mut self) -> Result<(), Error<SPI, CS>> {
+    pub fn disable_interrupts(&mut self) -> Result<(), Error<SPI>> {
         self.spi.sys_mask().write(|w| w)?;
         Ok(())
     }
@@ -432,7 +431,7 @@ where
         enable_rx: bool,
         enable_tx: bool,
         blink_time: u8,
-    ) -> Result<(), Error<SPI, CS>> {
+    ) -> Result<(), Error<SPI>> {
         // Turn on the timer that will control the blinking (The debounce clock)
         self.spi.pmsc_ctrl0().modify(|_, w| {
             w.gpdce((enable_rx_ok || enable_sfd || enable_rx || enable_tx) as u8)
@@ -468,7 +467,7 @@ where
         mut self,
         irq_on_wakeup: bool,
         sleep_duration: Option<u16>,
-    ) -> Result<DWM1000<SPI, CS, Sleeping>, Error<SPI, CS>> {
+    ) -> Result<DWM1000<SPI, Sleeping>, Error<SPI>> {
         // Set the sleep timer
         if let Some(sd) = sleep_duration {
             self.spi.pmsc_ctrl0().modify(|_, w| {

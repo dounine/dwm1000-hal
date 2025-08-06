@@ -1,21 +1,20 @@
-use crate::{DWM1000, Error, Ready, Uninitialized, spi};
+use crate::{DWM1000, Error, Ready, Uninitialized, device};
 use core::num::Wrapping;
 use embedded_hal::delay::DelayNs;
 use embedded_hal::digital::OutputPin;
 use embedded_hal::spi::SpiDevice;
 
-impl<SPI, CS> DWM1000<SPI, CS, Uninitialized>
+impl<SPI> DWM1000<SPI, Uninitialized>
 where
     SPI: SpiDevice,
-    CS: OutputPin,
 {
     /// Create a new instance of `DW1000`
     ///
     /// Requires the SPI peripheral and the chip select pin that are connected
     /// to the DW1000.
-    pub fn new(spi: SPI, chip_select: CS) -> Self {
+    pub fn new(spi: SPI) -> Self {
         DWM1000 {
-            spi: spi::DWM1000::new(spi, chip_select),
+            spi: device::DWM1000SpiDevice::new(spi),
             seq: Wrapping(0),
             state: Uninitialized,
         }
@@ -31,10 +30,10 @@ where
     /// Please note that this method assumes that you kept the default
     /// configuration. It is generally recommended not to change configuration
     /// before calling this method.
-    pub fn init<D: DelayNs>(
+    pub fn init(
         mut self,
-        delay: &mut D,
-    ) -> Result<DWM1000<SPI, CS, Ready>, Error<SPI, CS>> {
+        // delay: &mut D,
+    ) -> Result<DWM1000<SPI, Ready>, Error<SPI>> {
         // Set AGC_TUNE1. See user manual, section 2.5.5.1.
         self.spi.agc_tune1().write(|w| w.value(0x8870))?;
 
@@ -79,7 +78,7 @@ where
             .pmsc_ctrl0()
             .modify(|r, w| w.raw_value(r.raw_value() | 0x0301))?;
         self.spi.otp_ctrl().write(|w| w.ldeload(0b1))?;
-        delay.delay_ms(5);
+        // delay.delay_ms(5);
         self.spi
             .pmsc_ctrl0()
             .modify(|r, w| w.raw_value(r.raw_value() & !0x0101))?;

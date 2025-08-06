@@ -84,10 +84,9 @@ pub trait Message: Sized + for<'de> Deserialize<'de> + Serialize {
     /// Returns `Ok(None)`, if the message is not of the right type. Otherwise,
     /// returns `Ok(Some(RxMessage<Self>)), if the message is of the right type,
     /// and no error occured.
-    fn decode<SPI, CS>(message: &hal::Message) -> Result<Option<RxMessage<Self>>, Error<SPI, CS>>
+    fn decode<SPI>(message: &hal::Message) -> Result<Option<RxMessage<Self>>, Error<SPI>>
     where
         SPI: SpiDevice,
-        CS: OutputPin,
     {
         if !message.frame.payload.starts_with(Self::PRELUDE.0) {
             // Not a message of this type
@@ -159,13 +158,12 @@ where
     ///
     /// Serializes the message payload and uses [`DWM1000::send`] internally to
     /// send it.
-    pub fn send<'r, SPI, CS>(
+    pub fn send<'r, SPI>(
         &self,
-        dw1000: DWM1000<SPI, CS, Ready>,
-    ) -> Result<DWM1000<SPI, CS, Sending>, Error<SPI, CS>>
+        dw1000: DWM1000<SPI, Ready>,
+    ) -> Result<DWM1000<SPI, Sending>, Error<SPI>>
     where
         SPI:SpiDevice, 
-        CS: OutputPin,
     {
         // Create a buffer that fits the biggest message currently implemented.
         // This is a really ugly hack. The size of the buffer should just be
@@ -214,12 +212,11 @@ impl Ping {
     /// time to 10 milliseconds in the future. Make sure to send the message
     /// within that time frame, or the distance measurement will be negatively
     /// affected.
-    pub fn new<SPI, CS>(
-        dw1000: &mut DWM1000<SPI, CS, Ready>,
-    ) -> Result<TxMessage<Self>, Error<SPI, CS>>
+    pub fn new<SPI>(
+        dw1000: &mut DWM1000<SPI, Ready>,
+    ) -> Result<TxMessage<Self>, Error<SPI>>
     where
         SPI: SpiDevice,
-        CS: OutputPin,
     {
         let tx_time = dw1000.sys_time()? + Duration::from_nanos(TX_DELAY);
         let ping_tx_time = tx_time + dw1000.get_tx_antenna_delay()?;
@@ -265,13 +262,12 @@ impl Request {
     /// time to 10 milliseconds in the future. Make sure to send the message
     /// within that time frame, or the distance measurement will be negatively
     /// affected.
-    pub fn new<SPI, CS>(
-        dw1000: &mut DWM1000<SPI, CS, Ready>,
+    pub fn new<SPI>(
+        dw1000: &mut DWM1000<SPI, Ready>,
         ping: &RxMessage<Ping>,
-    ) -> Result<TxMessage<Self>, Error<SPI, CS>>
+    ) -> Result<TxMessage<Self>, Error<SPI>>
     where
         SPI: SpiDevice,
-        CS: OutputPin,
     {
         let tx_time = dw1000.sys_time()? + Duration::from_nanos(TX_DELAY);
         let request_tx_time = tx_time + dw1000.get_tx_antenna_delay()?;
@@ -327,13 +323,12 @@ impl Response {
     /// time to 10 milliseconds in the future. Make sure to send the message
     /// within that time frame, or the distance measurement will be negatively
     /// affected.
-    pub fn new<SPI, CS>(
-        dw1000: &mut DWM1000<SPI, CS, Ready>,
+    pub fn new<SPI>(
+        dw1000: &mut DWM1000<SPI, Ready>,
         request: &RxMessage<Request>,
-    ) -> Result<TxMessage<Self>, Error<SPI, CS>>
+    ) -> Result<TxMessage<Self>, Error<SPI>>
     where
         SPI: SpiDevice,
-        CS: OutputPin,
     {
         let tx_time = dw1000.sys_time()? + Duration::from_nanos(TX_DELAY);
         let response_tx_time = tx_time + dw1000.get_tx_antenna_delay()?;

@@ -3,16 +3,15 @@ use embedded_hal::digital::OutputPin;
 use embedded_hal::spi::SpiDevice;
 use crate::{Error, Ready, Sleeping, DWM1000};
 
-impl<SPI, CS> DWM1000<SPI, CS, Sleeping>
+impl<SPI> DWM1000<SPI, Sleeping>
 where
     SPI: SpiDevice,
-    CS: OutputPin,
 {
     // Wakes the radio up.
     // pub fn wake_up<DELAY: DelayNs>(
     //     mut self,
     //     delay: &mut DELAY,
-    // ) -> Result<DWM1000<SPI, CS, Ready>, Error<SPI, CS>> {
+    // ) -> Result<DWM1000<SPI, Ready>, Error<SPI>> {
     //     // Wake up using the spi
     //     self.spi.assert_cs_low().map_err(|e| Error::Spi(e))?;
     //     delay.delay_us(850 * 2);

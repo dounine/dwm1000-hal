@@ -3,10 +3,9 @@ use embedded_hal::digital::OutputPin;
 use embedded_hal::spi::SpiDevice;
 use nb;
 
-impl<SPI, CS> DWM1000<SPI, CS, Sending>
+impl<SPI> DWM1000<SPI, Sending>
 where
     SPI: SpiDevice,
-    CS: OutputPin,
 {
     /// Wait for the transmission to finish
     ///
@@ -20,7 +19,7 @@ where
     /// driver, but please note that if you're using the DWM1001 module or
     /// DWM1001-Dev board, that the `dwm1001` crate has explicit support for
     /// this.
-    pub fn wait_transmit(&mut self) -> nb::Result<Instant, Error<SPI, CS>> {
+    pub fn wait_transmit(&mut self) -> nb::Result<Instant, Error<SPI>> {
         // Check Half Period Warning Counter. If this is a delayed transmission,
         // this will indicate that the delay was too short, and the frame was
         // sent too late.
@@ -84,7 +83,7 @@ where
     ///
     /// If the send operation has finished, as indicated by `wait`, this is a
     /// no-op. If the send operation is still ongoing, it will be aborted.
-    pub fn finish_sending(mut self) -> Result<DWM1000<SPI, CS, Ready>, (Self, Error<SPI, CS>)> {
+    pub fn finish_sending(mut self) -> Result<DWM1000<SPI, Ready>, (Self, Error<SPI>)> {
         if !self.state.finished {
             // Can't use `map_err` and `?` here, as the compiler will complain
             // about `self` moving into the closure.
@@ -111,7 +110,7 @@ where
         })
     }
 
-    fn reset_flags(&mut self) -> Result<(), Error<SPI, CS>> {
+    fn reset_flags(&mut self) -> Result<(), Error<SPI>> {
         self.spi.sys_status().write(
             |w| {
                 w.txfrb(0b1) // Transmit Frame Begins

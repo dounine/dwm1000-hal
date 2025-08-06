@@ -3,11 +3,11 @@
 //! This module houses the datastructures that control how frames are transmitted and received.
 //! The configs are passed to the send and receive functions.
 
+use crate::hal::Error;
 use embedded_hal::digital::OutputPin;
 use embedded_hal::spi::SpiDevice;
 use num_enum::TryFromPrimitive;
 use serde::{Deserialize, Serialize};
-use crate::hal::Error;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 /// Transmit configuration
@@ -146,10 +146,9 @@ impl PulseRepetitionFrequency {
     }
 
     /// Gets the recommended value for the drx_tune2 register based on the PRF and PAC size
-    pub fn get_recommended_drx_tune2<SPI, CS>(&self, pac_size: u8) -> Result<u32, Error<SPI, CS>>
+    pub fn get_recommended_drx_tune2<SPI>(&self, pac_size: u8) -> Result<u32, Error<SPI>>
     where
         SPI: SpiDevice,
-        CS: OutputPin,
     {
         // Values taken from Table 33 of the DW1000 User Manual.
         match (self, pac_size) {
@@ -239,13 +238,9 @@ impl PreambleLength {
     }
 
     /// Gets the recommended drx_tune1b register value based on the preamble length and the bitrate.
-    pub fn get_recommended_drx_tune1b<SPI, CS>(
-        &self,
-        bitrate: BitRate,
-    ) -> Result<u16, Error<SPI, CS>>
+    pub fn get_recommended_drx_tune1b<SPI>(&self, bitrate: BitRate) -> Result<u16, Error<SPI>>
     where
         SPI: SpiDevice,
-        CS: OutputPin,
     {
         // Values are taken from Table 32 of the DW1000 User manual
         match (self, bitrate) {

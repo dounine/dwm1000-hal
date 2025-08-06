@@ -44,13 +44,12 @@ pub struct RxQuality {
     pub rssi: f32,
 }
 
-impl<SPI, CS, RECEIVING> DWM1000<SPI, CS, RECEIVING>
+impl<SPI, RECEIVING> DWM1000<SPI, RECEIVING>
 where
     SPI: SpiDevice,
-    CS: OutputPin,
     RECEIVING: Receiving,
 {
-    pub(super) fn start_receiving(&mut self, config: RxConfig) -> Result<(), Error<SPI, CS>> {
+    pub(super) fn start_receiving(&mut self, config: RxConfig) -> Result<(), Error<SPI>> {
         // Really weird thing about double buffering I can't find anything about.
         // When a message is received in double buffer mode that should be filtered out,
         // the radio gives a really short fake interrupt.
@@ -233,7 +232,7 @@ where
     pub fn wait_receive<'b>(
         &mut self,
         buffer: &'b mut [u8],
-    ) -> nb::Result<Message<'b>, Error<SPI, CS>> {
+    ) -> nb::Result<Message<'b>, Error<SPI>> {
         // ATTENTION:
         // If you're changing anything about which SYS_STATUS flags are being
         // checked in this method, also make sure to update `enable_interrupts`.
@@ -350,8 +349,8 @@ where
         Ok(Message { rx_time, frame })
     }
 
-    fn clear_status(&mut self) -> Result<(), Error<SPI, CS>> {
-        let do_clear = |ll: &mut crate::spi::DWM1000<SPI, CS>| {
+    fn clear_status(&mut self) -> Result<(), Error<SPI>> {
+        let do_clear = |ll: &mut crate::device::DWM1000SpiDevice<SPI>| {
             ll.sys_status().write(|w| {
                 w.rxprd(0b1) // Receiver Preamble Detected
                     .rxsfdd(0b1) // Receiver SFD Detected
@@ -444,7 +443,7 @@ where
     //     Ok(peak_count as f32 / (WINDOW_SIZE / 2) as f32)
     // }
 
-    fn calculate_prnlos(&mut self) -> Result<f32, Error<SPI, CS>> {
+    fn calculate_prnlos(&mut self) -> Result<f32, Error<SPI>> {
         #[allow(unused_imports)]
         use micromath::F32Ext;
 
@@ -466,7 +465,7 @@ where
         }
     }
 
-    fn calculate_mc(&mut self) -> Result<f32, Error<SPI, CS>> {
+    fn calculate_mc(&mut self) -> Result<f32, Error<SPI>> {
         let rx_time_register = self.spi().rx_time().read()?;
         let rx_fqual_register = self.spi().rx_fqual().read()?;
 
@@ -481,7 +480,7 @@ where
     /// Calculate the rssi based on the info the chip provides.
     ///
     /// Algorithm was taken from `4.7.2 Estimating the receive signal power` of the user manual.
-    fn calculate_rssi(&mut self) -> Result<f32, Error<SPI, CS>> {
+    fn calculate_rssi(&mut self) -> Result<f32, Error<SPI>> {
         #[allow(unused_imports)]
         use micromath::F32Ext;
 
@@ -548,7 +547,7 @@ where
     /// See the user manual at 6.1.3 to see how to calculate the actual time value.
     /// In the manual, the return values are named (N, T1, RX_RAWST)
     /// This is left to the user so the precision of the calculations are left to the user to decide.
-    pub fn read_external_sync_time(&mut self) -> Result<(u32, u8, u64), Error<SPI, CS>> {
+    pub fn read_external_sync_time(&mut self) -> Result<(u32, u8, u64), Error<SPI>> {
         assert!(
             self.state.is_finished(),
             "The function 'wait' must have successfully returned before this function can be called"
@@ -565,7 +564,7 @@ where
     ///
     /// If the receive operation has finished, as indicated by `wait`, this is a
     /// no-op. If the receive operation is still ongoing, it will be aborted.
-    pub fn finish_receiving(mut self) -> Result<DWM1000<SPI, CS, Ready>, (Self, Error<SPI, CS>)> {
+    pub fn finish_receiving(mut self) -> Result<DWM1000<SPI, Ready>, (Self, Error<SPI>)> {
         if !self.state.is_finished() {
             // Can't use `map_err` and `?` here, as the compiler will complain
             // about `self` moving into the closure.
@@ -583,17 +582,16 @@ where
     }
 }
 
-impl<SPI, CS> DWM1000<SPI, CS, AutoDoubleBufferReceiving>
+impl<SPI> DWM1000<SPI, AutoDoubleBufferReceiving>
 where
     SPI: SpiDevice,
-    CS: OutputPin,
 {
     /// Try to continue receiving
     pub fn continue_receiving(
         self,
     ) -> Result<
-        DWM1000<SPI, CS, AutoDoubleBufferReceiving>,
-        Result<DWM1000<SPI, CS, Ready>, (Self, Error<SPI, CS>)>,
+        DWM1000<SPI, AutoDoubleBufferReceiving>,
+        Result<DWM1000<SPI, Ready>, (Self, Error<SPI>)>,
     > {
         if !self.state.is_finished() {
             Err(self.finish_receiving())

@@ -2,7 +2,7 @@
 
 pub mod hal;
 pub mod configs;
-pub mod spi;
+pub mod device;
 mod range_bias;
 pub mod time;
 pub mod ranging;

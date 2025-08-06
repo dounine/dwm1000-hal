@@ -1,17 +1,16 @@
-use crate::spi;
+use crate::device;
 use core::fmt;
 use embedded_hal::digital::OutputPin;
 use embedded_hal::spi::SpiDevice;
 use ssmarshal;
 
 /// An error that can occur when sending or receiving data
-pub enum Error<SPI, CS>
+pub enum Error<SPI>
 where
     SPI: SpiDevice,
-    CS: OutputPin,
 {
     /// Error occured while using SPI bus
-    Spi(spi::Error<SPI, CS>),
+    Spi(device::Error<SPI>),
 
     /// Receiver FCS error
     Fcs,
@@ -84,20 +83,18 @@ where
     RxConfigFrameFilteringUnsupported,
 }
 
-impl<SPI, CS> From<spi::Error<SPI, CS>> for Error<SPI, CS>
+impl<SPI> From<device::Error<SPI>> for Error<SPI>
 where
     SPI: SpiDevice,
-    CS: OutputPin,
 {
-    fn from(error: spi::Error<SPI, CS>) -> Self {
+    fn from(error: device::Error<SPI>) -> Self {
         Error::Spi(error)
     }
 }
 
-impl<SPI, CS> From<ssmarshal::Error> for Error<SPI, CS>
+impl<SPI> From<ssmarshal::Error> for Error<SPI>
 where
     SPI: SpiDevice,
-    CS: OutputPin,
 {
     fn from(error: ssmarshal::Error) -> Self {
         Error::Ssmarshal(error)
@@ -106,12 +103,11 @@ where
 
 // We can't derive this implementation, as `Debug` is only implemented
 // conditionally for `ll::Debug`.
-impl<SPI, CS> fmt::Debug for Error<SPI, CS>
+impl<SPI> fmt::Debug for Error<SPI>
 where
     SPI: SpiDevice,
     // <SPI as spi::Transfer<u8>>::Error: fmt::Debug,
     // <SPI as spi::Write<u8>>::Error: fmt::Debug,
-    CS: OutputPin,
     // <CS as OutputPin>::Error: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

@@ -24,21 +24,19 @@ use embedded_hal::spi::SpiDevice;
 /// Please consider using [hl::DW1000] instead.
 ///
 /// [hl::DW1000]: ../hl/struct.DW1000.html
-pub(crate) struct DWM1000<SPI, CS> {
-    spi: SPI,
-    chip_select: CS,
+pub struct DWM1000SpiDevice<SPI> {
+    inner: SPI,
 }
-impl<SPI, CS> DWM1000<SPI, CS>
+impl<SPI> DWM1000SpiDevice<SPI>
 where
     SPI: SpiDevice,
-    CS: OutputPin,
 {
     /// Create a new instance of `DW1000`
     ///
     /// Requires the SPI peripheral and the chip select pin that are connected
     /// to the DW1000.
-    pub fn new(spi: SPI, chip_select: CS) -> Self {
-        DWM1000 { spi, chip_select }
+    pub fn new(spi: SPI) -> Self {
+        DWM1000SpiDevice { inner: spi }
     }
 
     /// Read a whole block of data
@@ -52,7 +50,7 @@ where
     //     id: u8,
     //     start_sub_id: u16,
     //     buffer: &'a mut [u8],
-    // ) -> Result<&'a mut [u8], Error<SPI, CS>> {
+    // ) -> Result<&'a mut [u8], Error<SPI>> {
     //     // Make it simple and use the 3 byte header
     //     buffer[0] = (((start_sub_id as u8) << 6) & 0x40) | (id & 0x3f);
     //     buffer[1] = 0x80 | (start_sub_id & 0x7F) as u8;
@@ -76,7 +74,7 @@ where
     //     &mut self,
     //     start_index: u16,
     //     buffer: &'a mut [u8],
-    // ) -> Result<&'a mut [u8], Error<SPI, CS>> {
+    // ) -> Result<&'a mut [u8], Error<SPI>> {
     //     let block = self.block_read(0x25, start_index, buffer)?;
     //     Ok(&mut block[1..])
     // }
@@ -96,14 +94,14 @@ where
             // Create a zeroed spi.
             let spi = core::mem::zeroed();
             // Get the spi in the struct.
-            let spi = core::mem::replace(&mut self.spi, spi);
+            let spi = core::mem::replace(&mut self.inner, spi);
             // Give the spi to the closure and put the result back into the struct.
-            self.spi = f(spi);
+            self.inner = f(spi);
         }
     }
 
     // Internal function for pulling the cs low. Used for sleep wakeup.
-    // pub(crate) fn assert_cs_low(&mut self) -> Result<(), Error<SPI, CS>> {
+    // pub(crate) fn assert_cs_low(&mut self) -> Result<(), Error<SPI>> {
     //     self.chip_select
     //         .set_low()
     //         .map_err(|err| Error::ChipSelect(err))?;
@@ -111,7 +109,7 @@ where
     // }
     //
     // /// Internal function for pulling the cs high. Used for sleep wakeup.
-    // pub(crate) fn assert_cs_high(&mut self) -> Result<(), Error<SPI, CS>> {
+    // pub(crate) fn assert_cs_high(&mut self) -> Result<(), Error<SPI>> {
     //     self.chip_select
     //         .set_high()
     //         .map_err(|err| Error::ChipSelect(err))?;
@@ -123,16 +121,15 @@ where
 /// Provides access to a register
 ///
 /// You can get an instance for a given register using one of the methods on
-/// [`DWM1000`].
-pub struct RegAccessor<'s, R, SPI, CS>(&'s mut DWM1000<SPI, CS>, PhantomData<R>);
+/// [`DWM1000SpiDevice`].
+pub struct RegAccessor<'s, R, SPI>(&'s mut DWM1000SpiDevice<SPI>, PhantomData<R>);
 
-impl<'s, R, SPI, CS> RegAccessor<'s, R, SPI, CS>
+impl<'s, R, SPI> RegAccessor<'s, R, SPI>
 where
     SPI: SpiDevice,
-    CS: OutputPin,
 {
     /// Read from the register
-    pub fn read(&mut self) -> Result<R::Read, Error<SPI, CS>>
+    pub fn read(&mut self) -> Result<R::Read, Error<SPI>>
     where
         R: Register + Readable,
     {
@@ -140,19 +137,19 @@ where
         let mut buffer = R::buffer(&mut r);
 
         init_header::<R>(false, &mut buffer);
-
         // self.0.assert_cs_low()?;
         self.0
-            .spi
-            .read(buffer)
+            .inner
+            .transfer_in_place(buffer)
             .map_err(|err| Error::Transfer(err))?;
+        // defmt::error!("access ok! {:?}",buffer);
         // self.0.assert_cs_high()?;
 
         Ok(r)
     }
 
     /// Write to the register
-    pub fn write<F>(&mut self, f: F) -> Result<(), Error<SPI, CS>>
+    pub fn write<F>(&mut self, f: F) -> Result<(), Error<SPI>>
     where
         R: Register + Writable,
         F: FnOnce(&mut R::Write) -> &mut R::Write,
@@ -165,7 +162,7 @@ where
 
         // self.0.assert_cs_low()?;
         self.0
-            .spi
+            .inner
             .write(buffer)
             .map_err(|err| Error::Transfer(err))?;
         // self.0.assert_cs_high()?;
@@ -174,7 +171,7 @@ where
     }
 
     /// Modify the register
-    pub fn modify<F>(&mut self, f: F) -> Result<(), Error<SPI, CS>>
+    pub fn modify<F>(&mut self, f: F) -> Result<(), Error<SPI>>
     where
         R: Register + Readable + Writable,
         F: for<'r> FnOnce(&mut R::Read, &'r mut R::Write) -> &'r mut R::Write,
@@ -191,7 +188,7 @@ where
 
         // self.0.assert_cs_low()?;
         self.0
-            .spi
+            .inner
             .write(buffer)
             .map_err(|err| Error::Transfer(err))?;
         // self.0.assert_cs_high()?;
@@ -201,27 +198,24 @@ where
 }
 
 /// An SPI error that can occur when communicating with the DW1000
-pub enum Error<SPI, CS>
+pub enum Error<SPI>
 where
     SPI: SpiDevice,
-    CS: OutputPin,
 {
     // Spi(SPI::Error),
     /// SPI error occured during a transfer transaction
     Transfer(SPI::Error),
-    ChipSelect(CS::Error),
+    ChipSelect(SPI::Error),
 }
 
 // We can't derive this implementation, as the compiler will complain that the
 // associated error type doesn't implement `Debug`.
-impl<SPI, CS> fmt::Debug for Error<SPI, CS>
+impl<SPI> fmt::Debug for Error<SPI>
 where
     SPI: SpiDevice,
     SPI::Error: fmt::Debug,
     // <SPI as spi::Transfer<u8>>::Error: fmt::Debug,
     // <SPI as spi::Write<u8>>::Error: fmt::Debug,
-    CS: OutputPin,
-    CS::Error: fmt::Debug,
     // <CS as OutputPin>::Error: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -372,7 +366,7 @@ macro_rules! impl_register {
                         #[$field_doc]
                         pub fn $field(&self) -> $ty {
                             use core::mem::size_of;
-                            use crate::spi::FromBytes;
+                            use crate::device::FromBytes;
 
                             // The index (in the register data) of the first
                             // byte that contains a part of this field.
@@ -486,7 +480,7 @@ macro_rules! impl_register {
                     $(
                         #[$field_doc]
                         pub fn $field(&mut self, value: $ty) -> &mut Self {
-                            use crate::spi::ToBytes;
+                            use crate::device::ToBytes;
 
                             // Convert value into bytes
                             let source = <$ty as ToBytes>::to_bytes(value);
@@ -605,10 +599,10 @@ macro_rules! impl_register {
         )*
 
 
-        impl<SPI, CS> DWM1000<SPI, CS> {
+        impl<SPI> DWM1000SpiDevice<SPI> {
             $(
                 #[$doc]
-                pub fn $name_lower(&mut self) -> RegAccessor<$name, SPI, CS> {
+                pub fn $name_lower(&mut self) -> RegAccessor<$name, SPI> {
                     RegAccessor(self, PhantomData)
                 }
             )*
@@ -1191,9 +1185,9 @@ impl Writable for TX_BUFFER {
     }
 }
 
-impl<SPI, CS> DWM1000<SPI, CS> {
+impl<SPI> DWM1000SpiDevice<SPI> {
     /// Transmit Data Buffer
-    pub fn tx_buffer(&mut self) -> RegAccessor<TX_BUFFER, SPI, CS> {
+    pub fn tx_buffer(&mut self) -> RegAccessor<TX_BUFFER, SPI> {
         RegAccessor(self, PhantomData)
     }
 }
@@ -1236,9 +1230,9 @@ impl Readable for RX_BUFFER {
     }
 }
 
-impl<SPI, CS> DWM1000<SPI, CS> {
+impl<SPI> DWM1000SpiDevice<SPI> {
     /// Receive Data Buffer
-    pub fn rx_buffer(&mut self) -> RegAccessor<RX_BUFFER, SPI, CS> {
+    pub fn rx_buffer(&mut self) -> RegAccessor<RX_BUFFER, SPI> {
         RegAccessor(self, PhantomData)
     }
 }
